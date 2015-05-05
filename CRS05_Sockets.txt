@@ -1,0 +1,396 @@
+==============================================================================
+Découverte : les sockets UDP et TCP        (Fabrice Harrouet, module CRS, 4UC)
+==============================================================================
+
+Il s'agit d'une série d'exercices en rapport avec la communication entre
+des processus répartis sur différentes machines à travers des réseaux.
+Chaque programme est volontairement très simple afin de se focaliser sur la
+découverte des services proposés sans être distrait par les détails annexes
+d'une quelconque application particulière.
+
+Il convient de traiter ces exercices tranquillement, en s'interrogeant à
+chaque fois sur le propos de la fonctionnalité particulière qui est mise en
+avant.
+Il ne sert strictement à rien d'enchaîner les exercices sans les comprendre
+en se contentant de :
+  ``ça compile et ça ne plante pas donc j'ai bon, je passe à la suite''
+
+La consultation de la documentation est très importante et fait partie
+intégrante du travail. Pour ceci vous disposez des pages de manuel indiquées
+à chaque exercice ainsi que des documents disponibles sur :
+  http://www.enib.fr/~harrouet/courses.html
+En particulier, le document ``Memo_Sockets.pdf'' devrait beaucoup vous guider
+puisqu'il donne les portions de codes usuelles qui servent de briques de base
+pour les communications en réseau (créer des sockets, se connecter, envoyer,
+recevoir ...). Les exemples suivants ont d'ailleurs été conçus pour que
+vous réutilisiez facilement les informations du document en question.
+
+nb : Le succès d'un appel système devra toujours être contrôlé (voir la
+     documentation) et en cas d'échec un message de diagnostic devra être
+     produit (man 3 perror).
+
+nb : Lorsqu'on vous propose plusieurs variantes pour un exercice, vous pouvez
+     faire différents programmes ou bien utiliser des options sur la ligne de
+     commande afin de faire adopter différents comportements à votre
+     programme.
+
+==============================================================================
+prog01_ip_address.c : Les communications reposent sur la notion d'adresse IP
+                      mais les êtres humains désignent plus volontiers les
+                      machines par un nom de domaine.
+
+Utilisez la fonction ``gethostname()'' afin de déterminer le nom de domaine
+de votre machine.
+Pour ce nom, ainsi que pour tous les noms passés sur la ligne de commande,
+notre fonction ``showIpAddress()'' est appelée.
+Complétez la alors en utilisant ``gethostbyname()'' pour obtenir l'adresse IP
+correspondant au nom de domaine qui lui est transmis en paramètre.
+Vous pourrez alors afficher cette adresse, si elle a été trouvée, sous forme
+de texte avec la fonction ``inet_ntoa()''.
+Il est facile de se perdre dans les diverses structures de données de l'API
+des sockets ; en particulier ``inet_ntoa()'' attend une ``struct in_addr''
+qu'il n'est pas immédiat d'obtenir depuis le résultat de ``gethostbyname()''.
+Voici une aide pour la fabriquer :
+  in_addr_t ipAddress= ... ; // voir les exemples de Memo_Sockets.pdf
+  struct in_addr addr={ ipAddress };
+  // utiliser ``inet_ntoa()'' avec ``addr''
+
+Voici un exemple de trace d'exécution :
+  $ ./prog01_ip_address piment7.enib.fr toto 192.168.36.29 www.google.com
+  `safran6' --> 192.168.73.56
+  `piment7.enib.fr' --> 192.168.73.107
+  unknown host `toto'
+  `192.168.36.29' --> 192.168.36.29
+  `www.google.com' --> 173.194.34.20
+Remarquez que la saisie d'une adresse IP à la place d'un nom ne pose pas de
+problème ; elle est simplement analysée comme telle même si elle n'est
+attribuée à aucun équipement.
+
+Documentation à consulter :
+  Memo_Sockets.pdf
+  man 3 gethostname
+  man 3 gethostbyname
+  man 3 inet_ntoa
+
+==============================================================================
+prog02_txt_udp_client.c
+prog02_txt_udp_server.c : Échanges de messages textuels distincts mais sans
+                          garantie de délivrance à l'aide du protocole UDP.
+
+Le programme client effectue une boucle qui attend la saisie d'une ligne de
+texte sur l'entrée standard et l'envoie en UDP vers la destination passée sur
+la ligne de commande (en précisant à chaque nouvel envoi l'adresse IP et le
+port de destination).
+Il attend ensuite une réponse sur la même socket UDP et l'affiche dans la
+console.
+
+Le programme serveur effectue une boucle qui attend une requête UDP (sur une
+socket associée au port qui sera visé par le programme client) et l'affiche
+comme du texte sur la sortie standard.
+Ce programme rédige ensuite une réponse (un message indiquant le nombre de
+caractères reçus par exemple) et l'envoie à l'émetteur de la requête.
+
+Le fonctionnement des programmes peut être essayé de la façon suivante :
+  Dans un terminal
+  $ ssh machine2
+  $ cd mon_repertoire_de_travail     Dans un autre terminal
+  $ ./prog02_txt_udp_server 9876     $ ./prog02_txt_udp_client machine2 9876
+                                     coucou
+  from 192.168.42.23:54276: coucou
+                                     from 192.168.42.21:9876: 7 bytes received
+                                     hello
+  from 192.168.42.23:54276: hello
+                                     from 192.168.42.21:9876: 6 bytes received
+Le port utilisé ici est tout à fait arbitraire et vous avez tout intérêt à en
+choisir un différent.
+L'arrêt brutal de chaque programme peut être obtenu par la combinaison de
+touches [Control]+[c] dans le terminal concerné.
+
+Assurez vous du bon fonctionnement de vos programmes et vérifiez que plusieurs
+processus clients peuvent communiquer simultanément avec un même processus
+serveur.
+Que constatez vous quand il n'y a aucun processus serveur à l'écoute ?
+
+Documentation à consulter :
+  Memo_Sockets.pdf
+  man 3 gethostbyname
+  man 2 socket
+  man 7 udp
+  man 7 socket
+  man 2 setsockopt
+  man 2 sendto
+  man 2 close
+  man 2 bind
+  man 2 recvfrom
+  man 3 inet_ntoa
+
+==============================================================================
+prog03_bin_udp_client.c
+prog03_bin_udp_server.c : Lorsque des machines s'échangent des données non
+                          textuelles (binaires), il faut s'assurer que ces
+                          séquences d'octets sont bien interprétées de la
+                          même façon une fois placées dans la mémoire
+                          (processeurs BIG-ENDIAN ou LITTLE-ENDIAN).
+
+Ces programmes sont très semblables aux précédents et pourront en grande
+partie être complétés par copier/coller.
+La différence essentielle avec l'exercice précédent repose sur la manière
+d'interpréter ce qui est saisi/échangé/affiché.
+Nous considérons maintenant que la ligne de texte saisie décrit un entier dont
+nous extrayons la valeur.
+Il faudra donc envoyer les quatre octets constitutifs de cette valeur entière
+de 32 bits dans un message UDP en respectant l'ordre réseau.
+À la réception de ce message de quatre octets il faudra reconstituer un entier
+de 32 bits au format hôte afin d'en afficher la valeur de manière usuelle.
+Comme prétexte à la réponse du serveur vous pouvez renvoyer le double de la
+valeur faisant l'objet de la requête.
+
+Le fonctionnement des programmes peut être essayé de la façon suivante :
+  Dans un terminal
+  $ ssh machine2
+  $ cd mon_repertoire_de_travail     Dans un autre terminal
+  $ ./prog03_bin_udp_server 9876     $ ./prog03_bin_udp_client machine2 9876
+                                     5
+  from 192.168.42.23:54276: 5
+                                     from 192.168.42.21:9876: 10
+                                     123
+  from 192.168.42.23:54276: 123
+                                     from 192.168.42.21:9876: 246
+Le port utilisé ici est tout à fait arbitraire et vous avez tout intérêt à en
+choisir un différent.
+L'arrêt brutal de chaque programme peut être obtenu par la combinaison de
+touches [Control]+[c] dans le terminal concerné.
+
+-- pour aller plus loin --
+Si vous avancez facilement dans les exercices proposés, vous pouvez envisager
+une nouvelle version de serveur qui écoute sur deux ports UDP distincts pour
+les communications textuelles et binaires.
+Il vous faudra alors effectuer une scrutation passive avec ``select()'' afin
+de surveiller à la fois les deux sockets UDP.
+Selon celle qui est sollicitée, il faudra réagir comme dans les programmes
+``prog02_txt_udp_server.c'' ou bien ``prog03_bin_udp_server.c''.
+Bien entendu, pour tester ce nouveau serveur vous utiliserez à la fois des
+clients ``prog02_txt_udp_client.c'' et ``prog03_bin_udp_client.c'' qui
+s'adresseront à votre serveur sur le port correspondant à leur mode de
+communication.
+
+Documentation à consulter :
+  Memo_Sockets.pdf
+  man 3 gethostbyname
+  man 2 socket
+  man 7 udp
+  man 7 socket
+  man 2 setsockopt
+  man 2 sendto
+  man 2 close
+  man 2 bind
+  man 2 recvfrom
+  man 3 inet_ntoa
+  man 3 htonl
+  man 3 ntohl
+  man 2 select
+
+==============================================================================
+prog04_tcp_client.c
+prog04_tcp_mono_server.c : Communication en mode connecté (fiable et ordonné)
+                           à l'aide du protocole TCP.
+
+Le programme client se connecte en TCP au serveur passé en ligne de commande
+et effectue une boucle qui attend la saisie d'une ligne de texte sur l'entrée
+standard et l'envoie dans la connexion au serveur, puis attend la réponse du
+serveur pour l'afficher sur la sortie standard.
+
+Le programme serveur crée une socket d'écoute et effectue une première boucle
+qui attend la connexion d'un client.
+Le dialogue avec ce client consiste en une seconde boucle qui à chaque
+itération attend un message en provenance du client, l'affiche sur la sortie
+standard et renvoie au client une réponse (un message indiquant le nombre de
+caractères reçus par exemple).
+Le serveur doit détecter la fermeture de la connexion par le client afin de
+quitter sa boucle de dialogue ; ceci lui permettra d'accepter la connexion
+d'un nouveau client avec lequel il dialoguera.
+
+Le fonctionnement des programmes peut être essayé de la façon suivante :
+  Dans un terminal
+  $ ssh machine2
+  $ cd mon_repertoire_de_travail           Dans un autre terminal
+  $ ./prog04_tcp_mono_server 9876          $ ./prog04_tcp_client machine2 9876
+  new connection from 192.168.42.23:32806
+                                           coucou
+  coucou
+                                           7 bytes received
+                                           hello
+  hello
+                                           6 bytes received
+Le port utilisé ici est tout à fait arbitraire et vous avez tout intérêt à en
+choisir un différent.
+L'arrêt brutal de chaque programme peut être obtenu par la combinaison
+de touches [Control]+[c] dans le terminal concerné.
+
+Assurez vous du bon fonctionnement de vos programmes et testez en particulier
+les déconnexions/reconnexions des clients.
+Que se passe-t-il quand plusieurs clients veulent dialoguer avec le serveur ?
+Que constatez vous quand il n'y a aucun serveur à l'écoute des clients ?
+
+Documentation à consulter :
+  Memo_Sockets.pdf
+  man 3 gethostbyname
+  man 2 socket
+  man 7 tcp
+  man 2 connect
+  man 2 send
+  man 2 recv
+  man 2 close
+  man 7 socket
+  man 2 setsockopt
+  man 2 bind
+  man 2 listen
+  man 2 accept
+
+==============================================================================
+prog05_tcp_thread_server.c : Un serveur TCP à base de threads peut rendre
+                             service à plusieurs clients simultanément.
+
+Réalisez une nouvelle version du serveur TCP dans laquelle le programme
+principal est consacré à l'attente des nouvelles connexions.
+Lorsqu'une nouvelle connexion survient, le programme principal l'accèpte mais
+ne gère pas le dialogue lui-même ; il confie cette tâche à un nouveau thread
+qu'il démarre pour l'occasion.
+Pour que chaque thread sache sur quelle connexion travailler, le programme
+principal alloue à chaque fois un entier désignant la nouvelle socket de
+dialogue et le transmet comme argument au thread qui doit le récupérer comme
+tel.
+Le thread ainsi créé se contente de gérer le dialogue avec un unique client
+(sans se soucier des autres) et de fermer la socket concernée lorsque ce
+dialogue prend fin.
+Ainsi, puisque le programme principal ne reste pas bloqué dans un quelconque
+dialogue, il retourne aussitôt se charger d'une éventuelle nouvelle connexion
+qui pourra faire apparaître un nouveau thread travaillant en parallèle du
+précédent.
+
+nb : comme vous le savez, les threads créés doivent normalement être attendus
+     par ``pthread_join()'' lorsqu'ils se terminent.
+     Pour ne pas avoir à ce soucier de ceci (nous ne savons pas quand tel ou
+     tel thread se terminera), une facilité consiste à utiliser
+     ``pthread_detach(pthread_self())'' dans le code des threads.
+
+nb : cette architecture de serveur TCP implique la création d'autant de
+     threads que de clients connectés simultanément, ce qui peut consommer
+     énormément de ressources en cas de forte charge (des milliers de clients)
+     mais n'est pas gênant pour un nombre de clients limité.
+     Cette solution a l'avantage d'être plus simple à écrire que celle
+     reposant sur la scrutation passive (``avec select()'') qui, elle, est
+     plus robuste et performante.
+
+Bien entendu nous réutiliserons ``prog04_tcp_client'' pour solliciter ce
+nouveau serveur.
+Vous devez vérifier que ce dernier entretient dorénavant des dialogues
+simultanés avec ses multiples clients.
+Assurez vous de la bonne prise en compte des déconnexions : la fin d'un
+dialogue avec un client ne doit pas arrêter le serveur, les autres clients ont
+toujours besoin du service.
+
+Documentation à consulter :
+  Memo_Sockets.pdf
+  man 2 socket
+  man 7 tcp
+  man 7 socket
+  man 2 setsockopt
+  man 2 bind
+  man 2 listen
+  man 2 accept
+  man pthread_create
+  man pthread_detach
+  man pthread_self
+  man 2 recv
+  man 2 send
+  man 2 close
+
+==============================================================================
+prog06_tcp_fork_server.c : Une alternative (historique) à la solution
+                           multithreads repose sur l'utilisation de plusieurs
+                           processus. Celle-ci à l'avantage de permettre le
+                           recouvrement par un autre programme exécutable qui
+                           dialogue avec le client.
+
+Réalisez une nouvelle version du serveur TCP précédent dans laquelle on
+fera apparaître des processus enfants plutôt que des threads.
+Puisque l'enfant hérite des descripteurs de fichier du parent, il devra fermer
+la socket d'écoute qui lui est inutile.
+De la même façon, le parent devra fermer la socket de dialogue qui ne sera
+utile qu'à l'enfant.
+
+L'attente des processus enfants est obligatoire mais le parent n'a aucun moyen
+de savoir à quelle moment réaliser cette opération.
+Pour ceci nous réutiliserons la solution proposée pour le programme
+``prog04_wait_process.c'' du labo ``CRS01_ProcessIO'' : réagir à la réception
+du signal SIGCHLD par des attentes non bloquantes.
+Puisque le parent passe la plus grande partie de son temps bloqué en attente
+dans ``accept()'', il est fort probable que cet appel système échoue avec
+le code d'erreur EINTR lorsqu'un enfant se terminera.
+Il ne faudra donc _PAS_ provoquer la terminaison du serveur lorsque cette
+erreur particulière sera détectée.
+
+Une fois que cette nouvelle architecture aura été testée (elle doit
+fonctionner comme la précédente), nous exploiterons le fait que nous utilisons
+des processus distincts pour les recouvrir par des programmes exécutables qui
+dialogueront avec chaque client.
+Si la ligne de commande est composée de plus de deux mots, nous considérerons
+que la suite de la ligne de commande représente la commande à utiliser pour le
+recouvrement.
+Bien entendu, les entrées/sorties standards et d'erreur (descripteurs de
+fichier 0, 1 et 2) doivent être redirigées dans la socket de dialogue pour que
+cette commande exécutée sur le serveur interagisse avec le client.
+Ainsi, en lançant le serveur de la façon suivante :
+  $ ./prog06_tcp_fork_server 9876 sed -rue 's/([^[:space:]]+)/<<\1>>/g'
+nous fournissons un service qui, pour chaque client connecté, renvoie chaque
+ligne de texte en encadrant les mots par des chevrons (inutile, mais bon ...).
+
+De la même façon, le serveur lancé par la commande :
+  $ ./prog06_tcp_fork_server 9876 python -ui
+fournit un interpréteur Python interactif à chaque client qui s'y connecte.
+Seulement, le dialogue avec cet interpréteur ne fonctionne pas forcément
+selon le schéma :
+  une ligne de texte envoyée provoque la réception d'une autre ligne de texte.
+Le client ``prog04_tcp_client.c'' ne sera donc pas bien adapté ici.
+À la place, vous pouvez utiliser le programme suivant :
+  $ nc machine_destination port_destination
+Ce programme se connecte au serveur TCP indiqué mais, contrairement à notre
+client précédent, ne suppose rien quant à l'ordre d'enchaînement des messages.
+Dès que quelque chose est saisi dans la console, ceci est envoyé dans la
+connexion et dès que quelque chose est reçu depuis la connexion, cela est
+écrit dans la console.
+Vérifiez alors que plusieurs clients interagissent bien avec les interpréteurs
+Python fournis par le serveur distant.
+Voici quelques commandes Python :
+  import socket
+  socket.gethostname()
+  import os
+  os.getpid()
+
+Si vous avez fini, modifiez alors votre client ``prog04_tcp_client.c'' en
+utilisant ``select()'' pour effectuer une scrutation passive de l'entrée
+standard et de la connexion.
+Ainsi, il se comportera comme le client TCP nc.
+
+Documentation à consulter :
+  Memo_Sockets.pdf
+  Entrees_Sorties.pdf
+  man 2 socket
+  man 7 tcp
+  man 7 socket
+  man 2 setsockopt
+  man 2 bind
+  man 2 listen
+  man 2 sigaction
+  man 2 accept
+  man 2 fork
+  man 2 recv
+  man 2 send
+  man 3 exit
+  man 2 close
+  man 2 dup2
+  man 3 execvp
+  man 2 select
+
+==============================================================================
